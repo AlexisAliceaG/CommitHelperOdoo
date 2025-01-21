@@ -21,7 +21,8 @@ function activate(context) {
                     { label: 'I18N', description: 'For changes in translation files.' },
                     { label: 'PERF', description: 'For performance patches.' }
                 ],
-                { placeHolder: 'Select the commit action' }
+                { placeHolder: 'Select the commit action',
+                    ignoreFocusOut: true }
             );
 
             if (!action) {
@@ -32,6 +33,7 @@ function activate(context) {
             const module = await vscode.window.showInputBox({
                 prompt: 'Which module is affected by this change?',
                 placeHolder: 'For example: auth, database, ui',
+                ignoreFocusOut: true
             });
 
             if (!module) {
@@ -39,22 +41,47 @@ function activate(context) {
                 return;
             }
 
-            const description = await vscode.window.showInputBox({
+            const shortDescription = await vscode.window.showInputBox({
                 prompt: 'Briefly describe the changes made (maximum 80 characters)',
-                placeHolder: 'Enter the description',
+                placeHolder: 'Enter the short description',
+                ignoreFocusOut: true,
                 validateInput: (text) => {
+                    if (text.includes('`') || text.includes('"')) {
+                        return 'The short description cannot contain backticks (`) or (").';
+                    }
                     return text.length > 80
                         ? `The description must not exceed 80 characters (${text.length})`
                         : null;
                 },
             });
 
-            if (!description) {
-                vscode.window.showWarningMessage('Description input was cancelled.');
+            if (!shortDescription) {
+                vscode.window.showWarningMessage('Short description input was cancelled.');
                 return;
             }
 
-            const commitMessage = `[${action.label}] ${module}: ${description}`;
+            const longDescription = await vscode.window.showInputBox({
+                prompt: 'Provide a detailed description of the changes made (maximum 300 characters)',
+                placeHolder: 'Enter the long description (optional)',
+                ignoreFocusOut: true,
+                validateInput: (text) => {
+                    if (text.includes('`') || text.includes('"')) {
+                        return 'The long description cannot contain backticks (`) or (").';
+                    }
+                    return text.length > 300
+                        ? `The long description must not exceed 300 characters (${text.length})`
+                        : null;
+                },
+            });
+
+            const wrapText = (text, maxLength) => {
+                if (!text) return '';
+                return text.match(new RegExp(`.{1,${maxLength}}`, 'g')).join('\n');
+            };
+
+            const formattedLongDescription = wrapText(longDescription, 80);
+
+            const commitMessage = `\n[${action.label}] ${module}: ${shortDescription}\n\n${formattedLongDescription}`;
 
             const activeTerminal = vscode.window.activeTerminal;
 
