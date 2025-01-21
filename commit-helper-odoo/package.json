@@ -1,21 +1,26 @@
 {
   "name": "commit-helper-odoo",
   "displayName": "Commit Helper Odoo",
-  "description": "It is an extension for visual studio code that helps to make it easier to commit with the Odoo standard.",
+  "description": "It is an extension for Visual Studio Code that helps to make it easier to commit with the Odoo standard.",
   "version": "0.0.1",
+  "author": "AlexisAliceaG",
   "engines": {
     "vscode": "^1.96.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:commit-helper.createCommit"
+  ],
   "main": "./extension.js",
   "contributes": {
-    "commands": [{
-      "command": "commit-helper-odoo.helloWorld",
-      "title": "Hello World"
-    }]
+    "commands": [
+      {
+        "command": "commit-helper.createCommit",
+        "title": "Commit Odoo"
+      }
+    ]
   },
   "scripts": {
     "lint": "eslint .",
