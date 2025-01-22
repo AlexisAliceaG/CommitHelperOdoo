@@ -1,11 +1,72 @@
 const vscode = require('vscode');
-
+const fs = require('fs');
+const path = require('path');
 /**
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
     let form = vscode.commands.registerCommand('commit-helper.createCommit', async () => {
         try {
+
+            const vscode = require('vscode');
+            const fs = require('fs');
+            const path = require('path');
+            
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                vscode.window.showWarningMessage('No workspace folders found.');
+                return;
+            }
+            
+            const findGitRepositories = (dir) => {
+                const repositories = [];
+                const files = fs.readdirSync(dir);
+            
+                files.forEach((file) => {
+                    const fullPath = path.join(dir, file);
+                    if (fs.statSync(fullPath).isDirectory()) {
+                        if (fs.existsSync(path.join(fullPath, '.git'))) {
+                            const repoName = path.basename(fullPath);
+                            repositories.push({ label: repoName, description: fullPath });
+                        }
+                        repositories.push(...findGitRepositories(fullPath));
+                    }
+                });
+            
+                return repositories;
+            };
+            
+            const getModules = (dir) => {
+                const modules = [];
+                const files = fs.readdirSync(dir);
+            
+                files.forEach((file) => {
+                    const fullPath = path.join(dir, file);
+                    if (fs.statSync(fullPath).isDirectory()) {
+                        modules.push(fullPath);
+                    }
+                });
+            
+                return modules;
+            };
+            
+            const gitRepositories = findGitRepositories(workspaceFolders[0].uri.fsPath);
+            
+            if (gitRepositories.length === 0) {
+                vscode.window.showWarningMessage('No Git repositories found in the workspace.');
+                return;
+            }
+            
+            const selectedRepo = await vscode.window.showQuickPick(gitRepositories, {
+                placeHolder: 'Select a repository to commit',
+                ignoreFocusOut: true
+            });
+            
+            if (!selectedRepo) {
+                vscode.window.showWarningMessage('No repository selected.');
+                return;
+            }
+
             const action = await vscode.window.showQuickPick(
                 [
                     { label: 'FIX', description: 'For bug fixes: mostly used in stable versions but also valid if fixing a recent bug in the development version.' },
@@ -30,17 +91,24 @@ function activate(context) {
                 return;
             }
 
-            const module = await vscode.window.showInputBox({
-                prompt: 'Which module is affected by this change?',
-                placeHolder: 'For example: auth, database, ui',
-                ignoreFocusOut: true
-            });
-
-            if (!module) {
-                vscode.window.showWarningMessage('Module input was cancelled.');
+           const modules = getModules(selectedRepo.description);
+            
+            if (modules.length === 0) {
+                vscode.window.showWarningMessage('No modules found in the selected repository.');
                 return;
             }
-
+            
+            const module = await vscode.window.showQuickPick(modules.map((dir) => path.basename(dir)), {
+                placeHolder: 'Select a module within the repository',
+                ignoreFocusOut: true
+            });
+            
+            if (!module) {
+                vscode.window.showWarningMessage('No module selected.');
+                return;
+            }
+            
+            vscode.window.showInformationMessage(`Selected module: ${selectedModule}`);
             const shortDescription = await vscode.window.showInputBox({
                 prompt: 'Briefly describe the changes made (maximum 80 characters)',
                 placeHolder: 'Enter the short description',
