@@ -1,69 +1,80 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
+
 /**
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
+    let isCommitInProgress = false;
+
     let form = vscode.commands.registerCommand('commit-helper.createCommit', async () => {
         try {
+            if (isCommitInProgress) {
+                vscode.window.showWarningMessage('A commit is already in progress.');
+                return;
+            }
 
-            const vscode = require('vscode');
-            const fs = require('fs');
-            const path = require('path');
-            
+            isCommitInProgress = true;
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders || workspaceFolders.length === 0) {
                 vscode.window.showWarningMessage('No workspace folders found.');
+                isCommitInProgress = false;
                 return;
             }
-            
+
             const findGitRepositories = (dir) => {
                 const repositories = [];
                 const files = fs.readdirSync(dir);
-            
                 files.forEach((file) => {
                     const fullPath = path.join(dir, file);
                     if (fs.statSync(fullPath).isDirectory()) {
                         if (fs.existsSync(path.join(fullPath, '.git'))) {
                             const repoName = path.basename(fullPath);
-                            repositories.push({ label: repoName, description: fullPath });
+
+                            let branchName = '';
+                            try {
+                                branchName = execSync('git rev-parse --abbrev-ref HEAD', { cwd: fullPath }).toString().trim();
+                            } catch (err) {
+                                branchName = 'unknown';
+                            }
+
+                            repositories.push({ label: `${repoName} (branch: ${branchName})`, description: fullPath });
                         }
                         repositories.push(...findGitRepositories(fullPath));
                     }
                 });
-            
                 return repositories;
             };
-            
+
             const getModules = (dir) => {
                 const modules = [];
                 const files = fs.readdirSync(dir);
-            
                 files.forEach((file) => {
                     const fullPath = path.join(dir, file);
-                    if (fs.statSync(fullPath).isDirectory()) {
+                    if (fs.statSync(fullPath).isDirectory() && file !== '.git') {
                         modules.push(fullPath);
                     }
                 });
-            
                 return modules;
             };
-            
+
             const gitRepositories = findGitRepositories(workspaceFolders[0].uri.fsPath);
-            
             if (gitRepositories.length === 0) {
                 vscode.window.showWarningMessage('No Git repositories found in the workspace.');
+                isCommitInProgress = false;
                 return;
             }
-            
+
             const selectedRepo = await vscode.window.showQuickPick(gitRepositories, {
                 placeHolder: 'Select a repository to commit',
                 ignoreFocusOut: true
             });
-            
+
             if (!selectedRepo) {
                 vscode.window.showWarningMessage('No repository selected.');
+                isCommitInProgress = false;
                 return;
             }
 
@@ -82,33 +93,33 @@ function activate(context) {
                     { label: 'I18N', description: 'For changes in translation files.' },
                     { label: 'PERF', description: 'For performance patches.' }
                 ],
-                { placeHolder: 'Select the commit action',
-                    ignoreFocusOut: true }
+                { placeHolder: 'Select the commit action', ignoreFocusOut: true }
             );
 
             if (!action) {
                 vscode.window.showWarningMessage('Action selection was cancelled.');
+                isCommitInProgress = false;
                 return;
             }
 
-           const modules = getModules(selectedRepo.description);
-            
+            const modules = getModules(selectedRepo.description);
             if (modules.length === 0) {
                 vscode.window.showWarningMessage('No modules found in the selected repository.');
+                isCommitInProgress = false;
                 return;
             }
-            
+
             const module = await vscode.window.showQuickPick(modules.map((dir) => path.basename(dir)), {
                 placeHolder: 'Select a module within the repository',
                 ignoreFocusOut: true
             });
-            
+
             if (!module) {
                 vscode.window.showWarningMessage('No module selected.');
+                isCommitInProgress = false;
                 return;
             }
-            
-            vscode.window.showInformationMessage(`Selected module: ${selectedModule}`);
+
             const shortDescription = await vscode.window.showInputBox({
                 prompt: 'Briefly describe the changes made (maximum 80 characters)',
                 placeHolder: 'Enter the short description',
@@ -125,6 +136,7 @@ function activate(context) {
 
             if (!shortDescription) {
                 vscode.window.showWarningMessage('Short description input was cancelled.');
+                isCommitInProgress = false;
                 return;
             }
 
@@ -159,12 +171,24 @@ function activate(context) {
             } else {
                 vscode.window.showWarningMessage('No active terminal found.');
             }
+
+            isCommitInProgress = false;
         } catch (error) {
             vscode.window.showErrorMessage(`Error creating commit: ${error.message}`);
+            isCommitInProgress = false;
         }
     });
 
-    context.subscriptions.push(form);
+    const cancelCommit = vscode.commands.registerCommand('commit-helper.cancelCommit', () => {
+        if (isCommitInProgress) {
+            vscode.window.showInformationMessage('Commit process has been cancelled.');
+            isCommitInProgress = false;
+        } else {
+            vscode.window.showWarningMessage('No commit process is currently in progress.');
+        }
+    });
+
+    context.subscriptions.push(form, cancelCommit);
 }
 
 function deactivate() {}
